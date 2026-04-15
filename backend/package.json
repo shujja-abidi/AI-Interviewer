@@ -1,0 +1,35 @@
+{
+  "name": "ai-interviewer",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "start:node": "node index.js",
+    "start:python": "venv\\Scripts\\python.exe server.py",
+    "start:both": "concurrently \"npm run start:node\" \"npm run start:python\" --names \"Node,Python\" --prefix-colors \"blue,green\"",
+    "dev": "concurrently \"npm run start:node\" \"npm run start:python\" --names \"Node,Python\" --prefix-colors \"blue,green\""
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^2.2.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.1",
+    "express-session": "^1.18.1",
+    "firebase": "^11.0.1",
+    "mongoose": "^8.21.1",
+    "nodemailer": "^7.0.12",
+    "nodemon": "^3.1.7",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
