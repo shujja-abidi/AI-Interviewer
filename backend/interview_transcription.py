@@ -3,7 +3,7 @@ import re
 from report_generator import extract_json_object, normalize_transcript_text
 
 
-def transcribe_media_file(genai_client, uploaded_file, question):
+def transcribe_media_file(genai_client, uploaded_file, question, invoke_gemini=None):
     prompt = f"""
 You are a precise speech-to-text assistant.
 Transcribe the candidate's answer to this interview question:
@@ -21,9 +21,13 @@ JSON format:
 }}
 """
 
-    response = genai_client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=[uploaded_file, prompt],
+    response = (
+        invoke_gemini([uploaded_file, prompt], "media transcription")
+        if invoke_gemini is not None
+        else genai_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[uploaded_file, prompt],
+        )
     )
     raw_text = response.text or ""
     parsed = extract_json_object(raw_text)

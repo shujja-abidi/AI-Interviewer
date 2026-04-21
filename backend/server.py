@@ -38,7 +38,7 @@ TMP_FOLDER = os.path.join(BASE_DIR, "storage", "tmp")
 ALLOWED_EXTENSIONS = {"pdf"}
 ALLOWED_AUDIO_EXTENSIONS = {"webm", "mp3", "wav", "ogg", "m4a"}
 ALLOWED_VIDEO_EXTENSIONS = {"webm", "mp4", "mov", "avi", "mkv"}
-MAX_CONTENT_LENGTH = 16 * 1024 * 1024
+MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(AUDIO_FOLDER, exist_ok=True)
@@ -55,6 +55,7 @@ businesses_collection = None
 jobs_collection = None
 stats_collection = None
 interview_sessions_collection = None
+feedback_collection = None
 
 try:
     if not MONGO_URI:
@@ -66,6 +67,7 @@ try:
     jobs_collection = db["jobs"]
     stats_collection = db["stats"]
     interview_sessions_collection = db["interview_sessions"]
+    feedback_collection = db["user_feedback"]
     print("Connected to MongoDB")
 except Exception as exc:
     print(f"Error connecting to MongoDB: {exc}")
@@ -74,6 +76,10 @@ api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
     print("WARNING: GEMINI_API_KEY not found in environment variables.")
 genai_client = genai.Client(api_key=api_key)
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MAX_RETRIES = int(os.getenv("GEMINI_MAX_RETRIES", "3"))
+GEMINI_RETRY_DELAYS = [2, 4, 8]
+INTERVIEW_QUESTION_COUNT = int(os.getenv("INTERVIEW_QUESTION_COUNT", "3"))
 
 
 def extract_text_from_pdf(pdf_path):
@@ -168,11 +174,50 @@ def serialize_for_json(value):
     return value
 
 
+def is_retryable_gemini_error(exc):
+    message = str(exc or "").lower()
+    retry_markers = [
+        "503",
+        "unavailable",
+        "high demand",
+        "deadline exceeded",
+        "timed out",
+        "timeout",
+        "connection reset",
+        "temporarily unavailable",
+    ]
+    return any(marker in message for marker in retry_markers)
+
+
+def invoke_gemini(contents, purpose):
+    last_error = None
+    for attempt in range(GEMINI_MAX_RETRIES):
+        try:
+            return genai_client.models.generate_content(model=GEMINI_MODEL, contents=contents)
+        except Exception as exc:
+            last_error = exc
+            if not is_retryable_gemini_error(exc) or attempt == GEMINI_MAX_RETRIES - 1:
+                break
+            time.sleep(GEMINI_RETRY_DELAYS[min(attempt, len(GEMINI_RETRY_DELAYS) - 1)])
+
+    message = str(last_error or "")
+    if "reported as leaked" in message.lower():
+        raise RuntimeError("The Gemini API key is invalid or has been disabled. Please replace it with a new key.")
+    if is_retryable_gemini_error(last_error):
+        raise RuntimeError(
+            f"The AI analysis service is temporarily busy while handling {purpose}. Please wait a few seconds and try again."
+        )
+    raise RuntimeError(f"Gemini request failed during {purpose}: {message}")
+
+
 def summarize_session(session):
     responses = session.get("responses", [])
     scores = [response.get("report", {}).get("overall_score", 0) for response in responses if response.get("report")]
     average_score = round(sum(scores) / len(scores), 1) if scores else 0
     latest_report = responses[-1].get("report") if responses else None
+    response_mode = session.get("response_mode", "per_question")
+    generated_question_count = len(session.get("questions", []))
+    displayed_question_count = 1 if response_mode == "single_video" else generated_question_count
     return {
         "session_id": session["session_id"],
         "candidate_name": session.get("candidate_name", ""),
@@ -182,8 +227,10 @@ def summarize_session(session):
         "business_email": session.get("business_email", ""),
         "interview_type": session.get("interview_type", ""),
         "difficulty": session.get("difficulty", ""),
+        "response_mode": response_mode,
         "status": session.get("status", "pending"),
-        "question_count": len(session.get("questions", [])),
+        "question_count": displayed_question_count,
+        "generated_question_count": generated_question_count,
         "responses_completed": len(responses),
         "overall_score": average_score,
         "recommended_decision": latest_report.get("recommended_decision", "Pending") if latest_report else "Pending",
@@ -208,8 +255,11 @@ def create_interview_session(payload, questions):
         "interview_type": payload.get("interview_type", ""),
         "difficulty": payload.get("difficulty", ""),
         "candidate_resume": payload.get("candidate_resume", ""),
+        "ats_score": payload.get("ats_score", 0),
+        "ats_report": payload.get("ats_report", {}),
         "questions": questions,
         "responses": [],
+        "response_mode": payload.get("response_mode", "per_question"),
         "status": "in_progress",
         "created_at": now,
         "updated_at": now,
@@ -242,7 +292,10 @@ def append_session_response(session_id, response_payload):
         responses.append(response_record)
 
     questions = session.get("questions", [])
-    status = "completed" if questions and len(responses) >= len(questions) else "in_progress"
+    if response_payload.get("complete_session") or session.get("response_mode") == "single_video":
+        status = "completed" if responses else "in_progress"
+    else:
+        status = "completed" if questions and len(responses) >= len(questions) else "in_progress"
     interview_sessions_collection.update_one(
         {"session_id": session_id},
         {
@@ -298,7 +351,7 @@ def build_question_fallback(payload):
 
 
 def generate_questions(payload):
-    question_count = max(3, min(10, int(payload.get("question_count", 5) or 5)))
+    question_count = INTERVIEW_QUESTION_COUNT
     prompt = build_question_generation_prompt(
         payload.get("job_title", ""),
         payload.get("job_description", ""),
@@ -309,7 +362,7 @@ def generate_questions(payload):
     )
 
     try:
-        response = genai_client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+        response = invoke_gemini(prompt, "question generation")
         parsed = extract_json_object(response.text or "")
         questions = parsed.get("questions", []) if parsed else []
         normalized = []
@@ -419,8 +472,11 @@ def interview_analysis():
             folder = app.config["AUDIO_FOLDER"]
 
         question = request.form.get("question", "").strip()
+        question_context = request.form.get("question_context", "").strip()
+        question_display = request.form.get("question_display", "").strip()
         session_id = request.form.get("session_id", "").strip()
         question_index = request.form.get("question_index", "0").strip()
+        complete_session = request.form.get("complete_session", "").strip().lower() == "true"
 
         if media_file:
             if media_file.filename == "":
@@ -443,15 +499,36 @@ def interview_analysis():
                 if uploaded_file.state == "FAILED":
                     raise RuntimeError("File processing failed by Gemini.")
 
-                transcript_text, transcript_raw = transcribe_media_file(genai_client, uploaded_file, question)
-                transcript_metrics = compute_transcript_metrics(question, transcript_text)
-                prompt = build_interview_analysis_prompt(question, media_type, transcript_text)
-                response = genai_client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=[uploaded_file, prompt],
+                analysis_prompt_question = question_context or question
+                prompt = build_interview_analysis_prompt(
+                    analysis_prompt_question,
+                    media_type,
+                    "Use the uploaded media as the primary transcript source.",
+                    local_video_metrics=local_video_metrics,
                 )
+                response = invoke_gemini([uploaded_file, prompt], "interview analysis")
                 raw_text = response.text or ""
                 parsed_report = extract_json_object(raw_text)
+                transcript_text = ""
+                transcript_raw = raw_text
+                if parsed_report:
+                    transcript_text = (
+                        parsed_report.get("transcript", {}).get("full_text", "")
+                        if isinstance(parsed_report.get("transcript", {}), dict)
+                        else ""
+                    )
+                if not transcript_text:
+                    try:
+                        transcript_text, transcript_raw = transcribe_media_file(
+                            genai_client,
+                            uploaded_file,
+                            question,
+                            invoke_gemini=invoke_gemini,
+                        )
+                    except Exception:
+                        transcript_text = ""
+                        transcript_raw = raw_text
+                transcript_metrics = compute_transcript_metrics(analysis_prompt_question, transcript_text)
                 report = (
                     normalize_interview_report(
                         parsed_report,
@@ -481,10 +558,11 @@ def interview_analysis():
                         session_id,
                         {
                             "question_index": int(question_index or 0),
-                            "question": question,
+                            "question": question_display or question or "Full interview session response",
                             "analysis": raw_text,
                             "transcript_raw": transcript_raw,
                             "report": report,
+                            "complete_session": complete_session,
                         },
                     )
                     session_summary = serialize_for_json(summarize_session(session))
@@ -504,17 +582,21 @@ def interview_analysis():
 
         data = request.get_json() or {}
         question = (data.get("question") or question).strip()
+        question_context = (data.get("question_context") or question_context).strip()
+        question_display = (data.get("question_display") or question_display).strip()
         answer_text = (data.get("answer") or "").strip()
         session_id = (data.get("session_id") or session_id).strip()
         question_index = int(data.get("question_index", question_index or 0))
+        complete_session = bool(data.get("complete_session", complete_session))
 
         if not answer_text:
             return jsonify({"error": "Answer text/audio required."}), 400
 
         transcript_text = answer_text
-        transcript_metrics = compute_transcript_metrics(question, transcript_text)
-        prompt = build_interview_analysis_prompt(question, "text", transcript_text, answer_text=answer_text)
-        response = genai_client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+        analysis_prompt_question = question_context or question
+        transcript_metrics = compute_transcript_metrics(analysis_prompt_question, transcript_text)
+        prompt = build_interview_analysis_prompt(analysis_prompt_question, "text", transcript_text, answer_text=answer_text)
+        response = invoke_gemini(prompt, "text interview analysis")
         raw_text = response.text or ""
         parsed_report = extract_json_object(raw_text)
         report = (
@@ -539,17 +621,19 @@ def interview_analysis():
                 session_id,
                 {
                     "question_index": question_index,
-                    "question": question,
+                    "question": question_display or question or "Full interview session response",
                     "analysis": raw_text,
                     "transcript_raw": "",
                     "report": report,
+                    "complete_session": complete_session,
                 },
             )
             session_summary = serialize_for_json(summarize_session(session))
 
         return jsonify({"analysis": raw_text, "report": report, "session": session_summary})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        status_code = 503 if "temporarily busy" in str(exc).lower() else 500
+        return jsonify({"error": str(exc)}), status_code
 
 
 @app.route("/api/interview-history", methods=["GET"])
@@ -590,6 +674,10 @@ def business_candidate_comparison():
             query["job_title"] = job_title
 
         sessions = list(interview_sessions_collection.find(query, {"_id": 0}).sort("updated_at", -1))
+        detailed_sessions = [
+            serialize_for_json({**session, "summary": summarize_session(session)})
+            for session in sessions
+        ]
         ranked_candidates = sorted(
             [serialize_for_json(summarize_session(session)) for session in sessions],
             key=lambda item: item.get("overall_score", 0),
@@ -601,9 +689,21 @@ def business_candidate_comparison():
             key = session.get("job_title") or "Unspecified role"
             by_job.setdefault(key, []).append(session)
 
-        return jsonify({"candidates": ranked_candidates, "by_job": by_job})
+        return jsonify({"candidates": ranked_candidates, "by_job": by_job, "sessions": detailed_sessions})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@app.errorhandler(413)
+def request_entity_too_large(_error):
+    return (
+        jsonify(
+            {
+                "error": "Your interview video is too large to upload. Please record a shorter response or try again with a smaller file."
+            }
+        ),
+        413,
+    )
 
 
 @app.route("/api/admin/stats", methods=["GET"])
@@ -624,6 +724,32 @@ def get_admin_stats():
                 "ai_usage": ai_usage_count,
             }
         )
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/submit-feedback", methods=["POST"])
+def submit_feedback():
+    try:
+        ensure_mongo_collection(feedback_collection, "Feedback collection")
+        data = request.get_json() or {}
+        session_id = data.get("session_id", "").strip()
+        user_email = data.get("user_email", "").strip()
+        rating = data.get("rating")
+        comment = data.get("comment", "").strip()
+
+        if not rating:
+            return jsonify({"error": "Rating is required"}), 400
+
+        document = {
+            "session_id": session_id,
+            "user_email": user_email,
+            "rating": rating,
+            "comment": comment,
+            "created_at": datetime.utcnow(),
+        }
+        feedback_collection.insert_one(document)
+        return jsonify({"message": "Feedback submitted successfully."})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 

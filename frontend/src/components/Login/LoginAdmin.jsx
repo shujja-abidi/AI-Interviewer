@@ -91,6 +91,13 @@ const LoginAdmin = () => {
                         >
                             Sign In
                         </Button>
+                        <Button
+                            fullWidth
+                            variant="outlined"
+                            onClick={() => navigate("/")}
+                        >
+                            Back to Home
+                        </Button>
                     </Box>
                 </Paper>
             </Box>

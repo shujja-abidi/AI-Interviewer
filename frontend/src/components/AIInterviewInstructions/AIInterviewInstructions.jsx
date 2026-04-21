@@ -7,8 +7,8 @@ const baseInstructions = [
   "Enable your camera and microphone.",
   "Ensure good lighting and a clear background.",
   "Ensure a stable internet connection.",
-  "Each question will appear on your screen one at a time.",
-  "Keep answers concise and relevant to the role.",
+  "Review all generated interview questions before you start recording.",
+  "Answer clearly and stay focused on the role.",
   "Maintain eye contact with the camera while answering.",
 ];
 
@@ -35,7 +35,7 @@ const AIInterviewInstructions = () => {
   const [cameraActive, setCameraActive] = useState(true);
   const [interviewType, setInterviewType] = useState("technical");
   const [difficulty, setDifficulty] = useState("mid");
-  const [questionCount, setQuestionCount] = useState(5);
+  const fixedQuestionCount = 3;
   const [isPreparing, setIsPreparing] = useState(false);
   const [error, setError] = useState("");
   const videoRef = useRef(null);
@@ -100,7 +100,10 @@ const AIInterviewInstructions = () => {
         business_email: job?.email || "",
         interview_type: interviewType,
         difficulty,
-        question_count: questionCount,
+        question_count: fixedQuestionCount,
+        response_mode: "single_video",
+        ats_score: atsReport?.overall_score || 0,
+        ats_report: atsReport || {},
         candidate_resume: JSON.stringify(resumeData || {}, null, 2),
         ats_report_summary: atsReport?.summary || "",
       };
@@ -154,8 +157,8 @@ const AIInterviewInstructions = () => {
     <div className="flex min-h-screen flex-col p-10 bg-gray-100">
       <h1 className="text-3xl font-bold text-gray-800 mb-4">Real-Time AI Interview Setup</h1>
       <p className="text-gray-600 mb-8">
-        Confirm your setup, choose the interview configuration, and we will generate a role-specific question set for
-        your session.
+        Confirm your setup, choose the interview configuration, and we will generate a short interview question set for
+        one recorded response.
       </p>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
@@ -224,15 +227,12 @@ const AIInterviewInstructions = () => {
               </label>
               <label className="text-sm text-gray-700">
                 <span className="block font-medium mb-2">Question Count</span>
-                <select
-                  value={questionCount}
-                  onChange={(event) => setQuestionCount(Number(event.target.value))}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                >
-                  <option value={3}>3</option>
-                  <option value={5}>5</option>
-                  <option value={7}>7</option>
-                </select>
+                <input
+                  type="number"
+                  value={fixedQuestionCount}
+                  readOnly
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
+                />
               </label>
             </div>
           </div>
@@ -267,9 +267,9 @@ const AIInterviewInstructions = () => {
           <div className="bg-white rounded-lg shadow-sm p-6 text-sm text-gray-700">
             <p className="font-semibold text-gray-800 mb-2">What happens next</p>
             <ul className="space-y-2 list-disc pl-5">
-              <li>Gemini generates a role-specific interview question set from the job details and resume context.</li>
-              <li>Each answer is captured through the camera and microphone during the live session and saved to MongoDB.</li>
-              <li>Your transcript, report, and final session history remain available from the candidate history page.</li>
+              <li>We will generate a short set of interview questions from the job details and your resume.</li>
+              <li>You will answer all questions in one recording with a clear time limit.</li>
+              <li>You will receive one full interview report with transcript, communication feedback, and overall recommendations.</li>
             </ul>
           </div>
         </div>
@@ -289,7 +289,7 @@ const AIInterviewInstructions = () => {
             !allInstructionsFollowed || !isCameraAndMicEnabled || isPreparing ? "opacity-50 cursor-not-allowed" : ""
           }`}
         >
-          {isPreparing ? "Generating Question Set..." : "Start Interview Session"}
+          {isPreparing ? "Preparing Interview..." : "Continue To Interview"}
         </button>
       </div>
     </div>

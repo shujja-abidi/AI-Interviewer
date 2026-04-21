@@ -447,6 +447,75 @@ app.get("/getjobs", async (req, res) => {
 
 
 
+// Candidate Profile Routes
+
+// Get Candidate Profile
+app.get("/api/candidate/profile", async (req, res) => {
+  try {
+    const email = req.query.email;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const existingUser = await user.findOne({ email }, { password: 0, resetPasswordOtp: 0, resetPasswordOtpExpires: 0 });
+    if (!existingUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      name: existingUser.name || "",
+      email: existingUser.email || "",
+      contact: existingUser.contact || "",
+    });
+  } catch (error) {
+    console.error("Error fetching profile:", error);
+    res.status(500).json({ message: "Failed to fetch profile" });
+  }
+});
+
+// Update Candidate Profile
+app.put("/api/candidate/profile", async (req, res) => {
+  try {
+    const { currentEmail, name, email, contact } = req.body;
+
+    if (!currentEmail) {
+      return res.status(400).json({ message: "Current email is required to identify user" });
+    }
+
+    const existingUser = await user.findOne({ email: currentEmail });
+    if (!existingUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if new email is already taken by another user
+    if (email && email !== currentEmail) {
+      const emailTaken = await user.findOne({ email });
+      if (emailTaken) {
+        return res.status(400).json({ message: "Email is already in use by another account" });
+      }
+    }
+
+    // Update fields
+    if (name !== undefined) existingUser.name = name;
+    if (email !== undefined) existingUser.email = email;
+    if (contact !== undefined) existingUser.contact = contact;
+
+    await existingUser.save();
+
+    res.json({
+      message: "Profile updated successfully",
+      user: {
+        name: existingUser.name,
+        email: existingUser.email,
+        contact: existingUser.contact || "",
+      },
+    });
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    res.status(500).json({ message: "Failed to update profile" });
+  }
+});
+
 // Admin Routes
 
 // Admin Login

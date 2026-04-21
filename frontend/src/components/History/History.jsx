@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { PYTHON_API_URL } from "../../config/api";
 import { getAuthSession } from "../../utility/auth";
-import { downloadJsonReport, printCurrentPage } from "../../utility/reportActions";
+import { buildInterviewPdfPayload, downloadInterviewPdf, printCurrentPage } from "../../utility/reportActions";
 
 const History = () => {
   const auth = getAuthSession();
@@ -71,7 +71,9 @@ const History = () => {
                 <h2 className="text-2xl font-semibold text-gray-800">{session.job_title || "Interview Session"}</h2>
                 <p className="text-gray-600">{session.company_name || "Interview Genius"}</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  {session.summary?.responses_completed || 0}/{session.summary?.question_count || 0} questions completed
+                  {session.summary?.response_mode === "single_video"
+                    ? `${session.summary?.generated_question_count || 0} questions completed in one recorded interview`
+                    : `${session.summary?.responses_completed || 0}/${session.summary?.question_count || 0} questions completed`}
                 </p>
               </div>
               <div className="text-right">
@@ -108,15 +110,10 @@ const History = () => {
             <div className="mt-5">
               <button
                 type="button"
-                onClick={() =>
-                  downloadJsonReport(`interview-session-${session.session_id}.json`, {
-                    generatedAt: new Date().toISOString(),
-                    session,
-                  })
-                }
+                onClick={() => downloadInterviewPdf(`interview-session-${session.session_id}.pdf`, buildInterviewPdfPayload({ session }))}
                 className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
               >
-                Download Session JSON
+                Download Interview PDF
               </button>
             </div>
           </section>

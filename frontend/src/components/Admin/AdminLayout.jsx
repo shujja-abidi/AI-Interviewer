@@ -1,9 +1,10 @@
 import React from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Box, Drawer, List, ListItem, ListItemIcon, ListItemText, Typography, AppBar, Toolbar, IconButton } from '@mui/material';
-import DashboardIcon from '@mui/icons-material/Dashboard'; // You might need to install @mui/icons-material if not present
+import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import LogoutIcon from '@mui/icons-material/Logout';
+import HomeIcon from '@mui/icons-material/Home';
 
 const drawerWidth = 240;
 
@@ -12,7 +13,7 @@ const AdminLayout = () => {
 
     const handleLogout = () => {
         // Clear any admin session/cookie logic here
-        navigate('/login-admin');
+        navigate('/');
     };
 
     return (
@@ -22,7 +23,10 @@ const AdminLayout = () => {
                     <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
                         Admin Dashboard
                     </Typography>
-                    <IconButton color="inherit" onClick={handleLogout}>
+                    <IconButton color="inherit" onClick={() => navigate('/')} title="Back to Home">
+                        <HomeIcon />
+                    </IconButton>
+                    <IconButton color="inherit" onClick={handleLogout} title="Logout">
                         <LogoutIcon />
                     </IconButton>
                 </Toolbar>

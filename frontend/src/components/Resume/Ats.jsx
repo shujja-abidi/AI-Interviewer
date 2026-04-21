@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { PYTHON_API_URL } from "../../config/api";
-import { downloadJsonReport, printCurrentPage } from "../../utility/reportActions";
+import { downloadAtsPdf, printCurrentPage } from "../../utility/reportActions";
 
 const scoreColor = (score) => {
   if (score >= 70) return "text-green-600";
@@ -86,14 +86,10 @@ const Ats = () => {
 
   const handleDownload = () => {
     if (!report) return;
-    downloadJsonReport(
-      `${(jobDetails?.title || "ats-report").toLowerCase().replace(/\s+/g, "-")}.json`,
-      {
-        generatedAt: new Date().toISOString(),
-        jobDetails,
-        report,
-      }
-    );
+    downloadAtsPdf(`${(jobDetails?.title || "ats-report").toLowerCase().replace(/\s+/g, "-")}.pdf`, {
+      jobDetails,
+      report,
+    });
   };
 
   const handleInterviewStart = () => {

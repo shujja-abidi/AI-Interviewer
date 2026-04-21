@@ -3,10 +3,11 @@ import { useNavigate } from "react-router-dom";
 
 const HRInterview = () => {
   const navigate = useNavigate();
+  const FIXED_QUESTION_COUNT = 3;
 
   const [languageTone, setLanguageTone] = useState("");
   const [difficulty, setDifficulty] = useState("");
-  const [questionCount, setQuestionCount] = useState(5);
+  const [questionCount] = useState(FIXED_QUESTION_COUNT);
 
 const handleNext = () => {
   const formData = {
@@ -112,11 +113,13 @@ const handleNext = () => {
           </label>
           <input
             type="number"
-            placeholder="Number of questions"
             value={questionCount}
-            onChange={(e) => setQuestionCount(e.target.value)}
-            className="w-full border border-gray-300 rounded-md p-2 mb-4"
+            readOnly
+            className="w-full border border-gray-300 rounded-md p-2 mb-2 bg-gray-100 text-gray-600 cursor-not-allowed"
           />
+          <p className="text-sm text-gray-500 mb-4">
+            HR interviews are currently fixed at {FIXED_QUESTION_COUNT} generated questions for stable real-time evaluation.
+          </p>
 
           <div className="additional-settings mt-4 p-4 border border-orange-500 rounded-md">
             <h3 className="text-orange-500 font-bold mb-2">Additional settings</h3>

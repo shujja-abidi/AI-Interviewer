@@ -1,7 +1,9 @@
 try:
     import cv2
+    from fer import FER
 except Exception:
     cv2 = None
+    FER = None
 
 
 def describe_rate(rate, good=0.75, medium=0.45, good_label="Strong", medium_label="Moderate", low_label="Low"):
@@ -28,12 +30,22 @@ def analyze_video_behavior(video_path):
 
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
     smile_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_smile.xml")
+    detector = FER(mtcnn=False) if FER is not None else None
 
     sampled_frames = 0
     frames_with_face = 0
     centered_frames = 0
     stable_frames = 0
     smile_frames = 0
+    emotion_counts = {
+        "happy": 0,
+        "sad": 0,
+        "angry": 0,
+        "surprise": 0,
+        "neutral": 0,
+        "disgust": 0,
+        "fear": 0,
+    }
     large_movement_frames = 0
     multi_face_frames = 0
     previous_center = None
@@ -87,15 +99,33 @@ def analyze_video_behavior(video_path):
             previous_center = (face_center_x, face_center_y)
             previous_area = face_area
 
-            roi_gray = gray[y : y + h, x : x + w]
-            smiles = smile_cascade.detectMultiScale(
-                roi_gray,
-                scaleFactor=1.7,
-                minNeighbors=20,
-                minSize=(25, 25),
-            )
-            if len(smiles) > 0:
-                smile_frames += 1
+            if detector is not None:
+                roi_color = frame[y : y + h, x : x + w]
+                try:
+                    emotions = detector.detect_emotions(roi_color)
+                    if emotions:
+                        emotion_probs = emotions[0].get("emotions", {})
+                        if emotion_probs:
+                            top_emotion = max(emotion_probs, key=emotion_probs.get)
+                            if top_emotion in emotion_counts:
+                                emotion_counts[top_emotion] += 1
+                            if top_emotion == "happy":
+                                smile_frames += 1
+                except Exception:
+                    pass
+            else:
+                roi_gray = gray[y : y + h, x : x + w]
+                smiles = smile_cascade.detectMultiScale(
+                    roi_gray,
+                    scaleFactor=1.7,
+                    minNeighbors=20,
+                    minSize=(25, 25),
+                )
+                if len(smiles) > 0:
+                    smile_frames += 1
+                    emotion_counts["happy"] += 1
+                else:
+                    emotion_counts["neutral"] += 1
     finally:
         capture.release()
 
@@ -111,6 +141,15 @@ def analyze_video_behavior(video_path):
     smile_detection_rate = smile_frames / max(frames_with_face, 1)
     movement_distraction_rate = large_movement_frames / max(frames_with_face, 1)
     multi_face_rate = multi_face_frames / max(sampled_frames, 1)
+    dominant_emotion = "neutral"
+    total_emotion_detections = sum(emotion_counts.values())
+    if total_emotion_detections > 0:
+        dominant_emotion = max(emotion_counts, key=emotion_counts.get)
+    emotion_breakdown = {
+        key: round((value / max(total_emotion_detections, 1)) * 100, 1)
+        for key, value in emotion_counts.items()
+        if value > 0
+    }
 
     return {
         "available": True,
@@ -137,13 +176,15 @@ def analyze_video_behavior(video_path):
             medium_label="Some visible movement",
             low_label="Noticeable movement or shifting",
         ),
+        "dominant_emotion": dominant_emotion,
+        "emotion_breakdown": emotion_breakdown,
         "facial_expression": describe_rate(
             smile_detection_rate,
             good=0.30,
             medium=0.08,
-            good_label="Frequently expressive",
-            medium_label="Occasionally expressive",
-            low_label="Mostly neutral expression",
+            good_label=f"Frequently expressive (mostly {dominant_emotion})",
+            medium_label=f"Occasionally expressive (mostly {dominant_emotion})",
+            low_label=f"Mostly neutral expression (mostly {dominant_emotion})",
         ),
         "presence": describe_rate(
             face_presence_rate,
@@ -165,7 +206,7 @@ def analyze_video_behavior(video_path):
     }
 
 
-def build_interview_analysis_prompt(question, media_type, transcript_text, answer_text=""):
+def build_interview_analysis_prompt(question, media_type, transcript_text, answer_text="", local_video_metrics=None):
     media_instructions = (
         "Assess verbal communication using the transcript and visible non-verbal communication using the uploaded video."
         if media_type == "video"
@@ -173,6 +214,14 @@ def build_interview_analysis_prompt(question, media_type, transcript_text, answe
     )
     answer_context = f"\nCandidate answer text: {answer_text}" if answer_text else ""
     transcript_context = f'\nTranscript: "{transcript_text}"'
+    emotion_context = ""
+    if local_video_metrics and local_video_metrics.get("available"):
+        dominant_emotion = local_video_metrics.get("dominant_emotion", "neutral")
+        breakdown = local_video_metrics.get("emotion_breakdown", {})
+        emotion_context = (
+            f"\nLocal Facial Expression AI detected dominant emotion: {dominant_emotion}. "
+            f"Breakdown: {breakdown}. Use this to inform your non-verbal and sentiment analysis."
+        )
 
     return f"""
 You are an expert interview evaluator preparing a structured candidate feedback report.
@@ -180,6 +229,7 @@ Question: "{question}".
 {media_instructions}
 {transcript_context}
 {answer_context}
+{emotion_context}
 
 Return valid JSON only with this exact structure:
 {{
@@ -259,8 +309,10 @@ Return valid JSON only:
 }}
 
 Rules:
-- Tailor questions to the role and interview type.
-- Mix practical and role-relevant questions.
+- CRITICAL: Thoroughly analyze the "Job description" and "Candidate resume summary" for any specific PROJ (projects), applications, or topics mentioned.
+- The questions MUST be heavily tailored to ask specifically about THAT exact project (e.g., asking about its architecture, the challenges faced, technical decisions made within it, and its features). Do not just ask generic role-based questions.
+- Mix practical and project-specific technical questions.
 - Keep each question concise and interview-ready.
+- EXTREMELY CRITICAL: Generate highly randomized, unique, and unpredictable questions. Do NOT return the same generic questions each time. Make sure they are different every single time you are prompted to avoid repeat questions.
 - Do not include explanations outside the JSON.
 """

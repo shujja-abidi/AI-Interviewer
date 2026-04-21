@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 
 const TechnicalInterview = () => {
   const navigate = useNavigate();
+  const FIXED_QUESTION_COUNT = 3;
 
   const [interviewType, setInterviewType] = useState("");
-  const [numberOfQuestions, setNumberOfQuestions] = useState(10);
+  const [numberOfQuestions] = useState(FIXED_QUESTION_COUNT);
   const [level, setLevel] = useState("");
   const [customQuestions, setCustomQuestions] = useState([]);
   const [showPopup, setShowPopup] = useState(false);
@@ -81,11 +82,13 @@ const TechnicalInterview = () => {
           </label>
           <input
             type="number"
-            placeholder="Number of questions"
             value={numberOfQuestions}
-            onChange={(e) => setNumberOfQuestions(e.target.value)}
-            className="w-full border border-gray-300 rounded-md p-2 mb-4"
+            readOnly
+            className="w-full border border-gray-300 rounded-md p-2 mb-2 bg-gray-100 text-gray-600 cursor-not-allowed"
           />
+          <p className="text-sm text-gray-500 mb-4">
+            Technical interviews are currently fixed at {FIXED_QUESTION_COUNT} generated questions for reliable live analysis.
+          </p>
         </div>
 
         {/* Right Column */}
