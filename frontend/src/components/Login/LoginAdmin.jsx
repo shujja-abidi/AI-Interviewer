@@ -10,6 +10,7 @@ import {
     Alert
 } from "@mui/material";
 import { NODE_API_URL } from "../../config/api";
+import { setAuthSession } from "../../utility/auth";
 
 const LoginAdmin = () => {
     const [email, setEmail] = useState("");
@@ -25,12 +26,15 @@ const LoginAdmin = () => {
                 headers: {
                     "Content-Type": "application/json",
                 },
+                credentials: 'include',
                 body: JSON.stringify({ email, password }),
             });
 
             const data = await response.json();
 
             if (data.success) {
+                // Persist admin auth in frontend storage
+                setAuthSession({ role: 'admin', name: data.user?.name || 'Admin', email: data.user?.email || email });
                 // Redirect to Admin Dashboard
                 navigate(data.redirectTo);
             } else {

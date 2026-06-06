@@ -3,6 +3,7 @@ import { MdOutlineWorkOutline, MdMenu } from "react-icons/md";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom"; // Import Link
 import ResponsiveMenu from "./ResponsiveMenu.jsx";
+import NotificationsBell from '../Notifications/NotificationsBell';
 
 // Navbar menu data
 const NavbarMenu = [
@@ -69,7 +70,8 @@ const Navbar = () => {
           </div>
 
           {/* CTA Button section */}
-          <div className="hidden lg:flex space-x-6">
+          <div className="hidden lg:flex items-center space-x-6">
+            <NotificationsBell />
             <Link to="/login"> {/* Use Link for Login */}
               <button className="text-gray-600 font-semibold px-4 py-2 rounded-full hover:bg-gray-200">
                 Login

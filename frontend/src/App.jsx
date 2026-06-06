@@ -21,6 +21,9 @@ const Resources = lazy(() => import("./components/Resources/Resources"));
 const ForStudents = lazy(() => import("./components/ForStudents/ForStudents"));
 const SideMenu = lazy(() => import("./components/SideMenu/SideMenu"));
 const CandidateHome = lazy(() => import("./components/CandidateHome/CandidateHome"));
+const CandidateApplications = lazy(() => import("./components/Applications/CandidateApplications"));
+const EmployerApplications = lazy(() => import("./components/Applications/EmployerApplications"));
+const NotificationsPage = lazy(() => import("./components/Notifications/NotificationsPage"));
 const Resume = lazy(() => import("./components/Resume/Resume"));
 const Ats = lazy(() => import("./components/Resume/Ats"));
 const History = lazy(() => import("./components/History/History"));
@@ -107,6 +110,15 @@ const App = () => {
               }
             />
             <Route
+              path="/notifications"
+              element={
+                <>
+                  <Navbar />
+                  <NotificationsPage />
+                </>
+              }
+            />
+            <Route
               path="/contact-us"
               element={
                 <>
@@ -158,6 +170,7 @@ const App = () => {
                       <Route path="home" element={<CandidateHome />} />
                       <Route path="resume" element={<Resume />} />
                       <Route path="ats" element={<Ats />} />
+                      <Route path="applications" element={<CandidateApplications />} />
                       <Route path="history" element={<History />} />
                       <Route path="profile" element={<Profile />} />
                       <Route path="settings" element={<Settings />} />
@@ -187,6 +200,7 @@ const App = () => {
                       <Route path="technical-interview" element={<TechnicalInterview />} />
                       <Route path="profile" element={<Profiles />} />
                       <Route path="preview" element={<Preview />} />
+                      <Route path="applications" element={<EmployerApplications />} />
                     </Routes>
                   </main>
                 </div>

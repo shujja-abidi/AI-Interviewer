@@ -3,6 +3,7 @@ import { MdOutlineWorkOutline, MdMenu } from "react-icons/md";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { clearAuthSession } from "../../utility/auth";
+import NotificationsBell from '../Notifications/NotificationsBell';
 
 // Navbar menu data
 const BusinessNavbarMenu = [
@@ -75,9 +76,14 @@ const BusinessNavbar = () => {
       {/* Main Content */}
       <div className="ml-80 w-full">
         <div className="container p-6">
-          <button onClick={() => setIsOpen(!isOpen)} className="lg:hidden text-secondary text-4xl">
-            <MdMenu />
-          </button>
+          <div className="flex items-center justify-between">
+            <button onClick={() => setIsOpen(!isOpen)} className="lg:hidden text-secondary text-4xl">
+              <MdMenu />
+            </button>
+            <div className="hidden lg:block">
+              <NotificationsBell />
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -6,6 +6,9 @@ const bcrypt = require("bcryptjs");
 const user = require("./db/user");
 const business = require("./db/business");
 const job = require("./db/job");
+const Application = require("./db/application");
+const Interview = require("./db/interview");
+const Notification = require("./db/notification");
 const app = express();
 require("dotenv").config();
 const passport = require("passport");
@@ -53,6 +56,49 @@ app.use(
 );
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Authorization helpers
+const requireAdmin = (req, res, next) => {
+  if (!req.session || (!req.session.user && !req.session.business && !req.session.admin)) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+  if (req.session && req.session.admin) return next();
+  return res.status(403).json({ message: 'Admin privileges required' });
+};
+
+const requireBusinessOwnerOrAdminForApplication = async (req, res, next) => {
+  try {
+    if (!req.session || (!req.session.business && !req.session.admin)) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    const appDoc = await Application.findById(req.params.id);
+    if (!appDoc) return res.status(404).json({ message: 'Application not found' });
+    const sessionBusinessEmail = req.session && req.session.business && req.session.business.email;
+    if (req.session && req.session.admin) return next();
+    if (sessionBusinessEmail && sessionBusinessEmail === appDoc.business_email) return next();
+    return res.status(403).json({ message: 'Not authorized for this application' });
+  } catch (err) {
+    console.error('Authorization error:', err);
+    return res.status(500).json({ message: 'Authorization check failed' });
+  }
+};
+
+const requireBusinessOrAdminForJob = async (req, res, next) => {
+  try {
+    if (!req.session || (!req.session.business && !req.session.admin)) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+    const jobDoc = await job.findById(req.params.id);
+    if (!jobDoc) return res.status(404).json({ message: 'Job not found' });
+    const sessionBusinessEmail = req.session && req.session.business && req.session.business.email;
+    if (req.session && req.session.admin) return next();
+    if (sessionBusinessEmail && sessionBusinessEmail === jobDoc.email) return next();
+    return res.status(403).json({ message: 'Not authorized for this job' });
+  } catch (err) {
+    console.error('Authorization error:', err);
+    return res.status(500).json({ message: 'Authorization check failed' });
+  }
+};
 
 passport.use(
   new GoogleStrategy(
@@ -259,53 +305,37 @@ app.get(
 app.post("/logincand", async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
-    }
+    if (!email || !password) return res.status(400).json({ message: 'Email and password required' });
 
     const existingUser = await user.findOne({ email });
-
-    if (!existingUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!existingUser) return res.status(404).json({ message: 'User not found' });
 
     const isMatch = await bcrypt.compare(password, existingUser.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: "Invalid email or password" });
-    }
+    if (!isMatch) return res.status(401).json({ message: 'Invalid email or password' });
 
-    // Set session
+    // Set session for candidate
     req.session.user = {
       id: existingUser._id,
       email: existingUser.email,
       name: existingUser.name,
+      role: 'candidate',
     };
 
     // Set cookies
-    res.cookie("username", existingUser.name, {
+    res.cookie('username', existingUser.name, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+    res.cookie('email', existingUser.email, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
     });
 
-    res.cookie("email", existingUser.email, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    });
-
-    res.json({
-      success: true,
-      message: "Login successful",
-      user: {
-        name: existingUser.name,
-        email: existingUser.email,
-      },
-      redirectTo: "/candidate/home", // Add redirect URL in response
-    });
+    res.json({ success: true, message: 'Login successful', user: { name: existingUser.name, email: existingUser.email }, redirectTo: '/candidate/home' });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ success: false, message: "An error occurred during login" });
@@ -523,7 +553,11 @@ app.post("/loginadmin", async (req, res) => {
   try {
     const { email, password } = req.body;
     if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-      // Set admin session/cookie if needed, or just return success for simple auth
+      // Mark session as admin
+      if (req.session) {
+        req.session.admin = true;
+        req.session.user = { name: 'Admin', email: ADMIN_EMAIL, role: 'admin' };
+      }
       res.json({
         success: true,
         message: "Admin Login successful",
@@ -614,4 +648,299 @@ app.put("/api/admin/user/:type/:id", async (req, res) => {
 
 app.listen(NODE_API_PORT, () => {
   console.log(`Server is running on port ${NODE_API_PORT}`);
+});
+
+// --- Applications API --- //
+// Candidate applies to a job
+app.post("/apply", async (req, res) => {
+  try {
+    const { job_id, candidate_email, candidate_name, resume, ats_score } = req.body;
+    if (!job_id || !candidate_email) {
+      return res.status(400).json({ message: "job_id and candidate_email are required" });
+    }
+
+    const jobDoc = await job.findById(job_id);
+    if (!jobDoc) {
+      return res.status(404).json({ message: "Job not found" });
+    }
+
+    const newApp = new Application({
+      job_id,
+      job_title: jobDoc.basicDetails?.title || jobDoc.name,
+      business_email: jobDoc.email,
+      candidate_email,
+      candidate_name,
+      resume,
+      ats_score: ats_score || 0,
+      status: "pending",
+    });
+
+    await newApp.save();
+    // create in-app notification for the business
+    try {
+      await Notification.create({
+        to: jobDoc.email,
+        type: 'application_received',
+        title: 'New application received',
+        message: `${candidate_name || candidate_email} applied for ${newApp.job_title}`,
+        data: { application_id: newApp._id.toString(), job_id },
+      });
+    } catch (nerr) {
+      console.error('Failed to create notification:', nerr);
+    }
+    res.status(201).json({ message: "Application submitted", application: newApp });
+  } catch (error) {
+    console.error("Error submitting application:", error);
+    res.status(500).json({ message: "Failed to submit application" });
+  }
+});
+
+// List applications (candidate or employer view)
+app.get("/applications", async (req, res) => {
+  try {
+    const { candidate_email, business_email, job_id, status } = req.query;
+    const filter = {};
+    if (candidate_email) filter.candidate_email = candidate_email;
+    if (business_email) filter.business_email = business_email;
+    if (job_id) filter.job_id = job_id;
+    if (status) filter.status = status;
+
+    const apps = await Application.find(filter).sort({ applied_at: -1 });
+    res.json(apps);
+  } catch (error) {
+    console.error("Error fetching applications:", error);
+    res.status(500).json({ message: "Failed to fetch applications" });
+  }
+});
+
+// Get single application
+app.get("/applications/:id", async (req, res) => {
+  try {
+    const appDoc = await Application.findById(req.params.id);
+    if (!appDoc) return res.status(404).json({ message: "Application not found" });
+    res.json(appDoc);
+  } catch (error) {
+    console.error("Error fetching application:", error);
+    res.status(500).json({ message: "Failed to fetch application" });
+  }
+});
+
+// Update application status (shortlist, schedule, approve, reject)
+app.put("/applications/:id/status", requireBusinessOwnerOrAdminForApplication, async (req, res) => {
+  try {
+    const { status, note, changed_by } = req.body;
+    const valid = ["pending", "ongoing", "shortlisted", "interview_scheduled", "approved", "rejected"];
+    if (!status || !valid.includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const appDoc = await Application.findById(req.params.id);
+    if (!appDoc) return res.status(404).json({ message: "Application not found" });
+
+    appDoc.history = appDoc.history || [];
+    appDoc.history.push({ status, note: note || "", changed_by: changed_by || "system", changed_at: new Date() });
+    appDoc.status = status;
+    appDoc.updated_at = new Date();
+
+    await appDoc.save();
+
+    // trigger in-app notification and email to candidate
+    try {
+      await Notification.create({
+        to: appDoc.candidate_email,
+        type: 'application_status',
+        title: `Application ${appDoc.status}`,
+        message: `Your application for ${appDoc.job_title} is now ${appDoc.status}`,
+        data: { application_id: appDoc._id.toString(), status: appDoc.status },
+      });
+    } catch (nerr) {
+      console.error('Failed to create notification:', nerr);
+    }
+
+    if (transporter) {
+      try {
+        await transporter.sendMail({
+          from: EMAIL_USER,
+          to: appDoc.candidate_email,
+          subject: `Application status update: ${appDoc.job_title}`,
+          text: `Hello ${appDoc.candidate_name || ''},\n\nYour application for ${appDoc.job_title} is now ${appDoc.status}.\n\nRegards,\nRecruitment Team`,
+        });
+      } catch (mailErr) {
+        console.error('Failed to send status email:', mailErr);
+      }
+    }
+
+    res.json({ message: "Application status updated", application: appDoc });
+  } catch (error) {
+    console.error("Error updating application status:", error);
+    res.status(500).json({ message: "Failed to update status" });
+  }
+});
+
+// Schedule interview for an application
+app.post('/applications/:id/schedule', requireBusinessOwnerOrAdminForApplication, async (req, res) => {
+  try {
+    const { scheduled_time, notes, interview_link } = req.body;
+    const appDoc = await Application.findById(req.params.id);
+    if (!appDoc) return res.status(404).json({ message: 'Application not found' });
+
+    appDoc.scheduled_interview = {
+      scheduled_time: scheduled_time ? new Date(scheduled_time) : null,
+      notes: notes || '',
+      interview_link: interview_link || '',
+    };
+    appDoc.status = 'interview_scheduled';
+    appDoc.updated_at = new Date();
+    appDoc.history = appDoc.history || [];
+    appDoc.history.push({ status: appDoc.status, note: notes || '', changed_by: req.body.changed_by || 'employer', changed_at: new Date() });
+
+    await appDoc.save();
+
+    // notify candidate
+    try {
+      await Notification.create({
+        to: appDoc.candidate_email,
+        type: 'interview_scheduled',
+        title: 'Interview Scheduled',
+        message: `Your interview for ${appDoc.job_title} has been scheduled for ${appDoc.scheduled_interview.scheduled_time}`,
+        data: { application_id: appDoc._id.toString(), scheduled_time: appDoc.scheduled_interview.scheduled_time },
+      });
+    } catch (nerr) {
+      console.error('Failed to create schedule notification:', nerr);
+    }
+
+    if (transporter) {
+      try {
+        await transporter.sendMail({
+          from: EMAIL_USER,
+          to: appDoc.candidate_email,
+          subject: `Interview scheduled: ${appDoc.job_title}`,
+          text: `Hello ${appDoc.candidate_name || ''},\n\nYour interview for ${appDoc.job_title} is scheduled at ${appDoc.scheduled_interview.scheduled_time}.\n\nLink: ${appDoc.scheduled_interview.interview_link || 'TBD'}\n\nNotes:\n${appDoc.scheduled_interview.notes || ''}`,
+        });
+      } catch (mailErr) {
+        console.error('Failed to send schedule email:', mailErr);
+      }
+    }
+
+    res.json({ message: 'Interview scheduled', application: appDoc });
+  } catch (error) {
+    console.error('Error scheduling interview:', error);
+    res.status(500).json({ message: 'Failed to schedule interview' });
+  }
+});
+
+// --- Admin Job Approval / Moderation --- //
+// List jobs with optional status filter (admin view)
+app.get("/admin/jobs", async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+    const jobs = await job.find(filter).sort({ _id: -1 });
+    res.json(jobs);
+  } catch (error) {
+    console.error("Error fetching admin jobs:", error);
+    res.status(500).json({ message: "Failed to fetch jobs" });
+  }
+});
+
+// Approve or reject a job (admin only)
+app.put("/admin/job/:id/status", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, admin_note } = req.body;
+    const valid = ["draft", "pending", "approved", "rejected"];
+    if (!status || !valid.includes(status)) return res.status(400).json({ message: "Invalid status" });
+
+    const jobDoc = await job.findById(id);
+    if (!jobDoc) return res.status(404).json({ message: "Job not found" });
+
+    jobDoc.status = status;
+    if (!jobDoc.created_by && jobDoc.email) jobDoc.created_by = jobDoc.email;
+    await jobDoc.save();
+
+    // Send notification email to business when approved/rejected
+    if (transporter && (status === "approved" || status === "rejected")) {
+      const subject = `Your job post has been ${status}`;
+      const text = `Hello ${jobDoc.name || "Employer"},\n\nYour job posting (${jobDoc.basicDetails?.title || jobDoc.name}) has been ${status} by the admin.\n\n${admin_note || ""}\n\nRegards,\nAdmin`;
+      try {
+        await transporter.sendMail({ from: EMAIL_USER, to: jobDoc.email, subject, text });
+      } catch (mailErr) {
+        console.error("Failed to send job status email:", mailErr);
+      }
+    }
+
+    // create in-app notification for business
+    try {
+      await Notification.create({
+        to: jobDoc.email,
+        type: 'job_moderation',
+        title: `Job ${status}`,
+        message: `Your job post (${jobDoc.basicDetails?.title || jobDoc.name}) has been ${status}`,
+        data: { job_id: jobDoc._id.toString(), status },
+      });
+    } catch (nerr) {
+      console.error('Failed to create notification for job status:', nerr);
+    }
+
+    res.json({ message: "Job status updated", job: jobDoc });
+  } catch (error) {
+    console.error("Error updating job status:", error);
+    res.status(500).json({ message: "Failed to update job status" });
+  }
+});
+
+// Basic logout endpoint
+app.post("/auth/logout", (req, res) => {
+  try {
+    if (req.session) req.session.destroy(() => {});
+    res.clearCookie("username");
+    res.clearCookie("email");
+    res.clearCookie("businessName");
+    res.clearCookie("businessEmail");
+    res.json({ message: "Logged out" });
+  } catch (error) {
+    res.status(500).json({ message: "Logout failed" });
+  }
+});
+
+// Notifications endpoints
+app.get('/notifications', async (req, res) => {
+  try {
+    const { to, unreadOnly } = req.query;
+    if (!to) return res.status(400).json({ message: 'to query param is required' });
+    const filter = { to };
+    if (unreadOnly === 'true') filter.read = false;
+    const notes = await Notification.find(filter).sort({ created_at: -1 });
+    res.json(notes);
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ message: 'Failed to fetch notifications' });
+  }
+});
+
+app.post('/notifications/:id/read', async (req, res) => {
+  try {
+    const note = await Notification.findById(req.params.id);
+    if (!note) return res.status(404).json({ message: 'Notification not found' });
+    note.read = true;
+    await note.save();
+    res.json({ message: 'Marked read' });
+  } catch (error) {
+    console.error('Error marking notification read:', error);
+    res.status(500).json({ message: 'Failed to update notification' });
+  }
+});
+
+// Mark all notifications read for a recipient
+app.post('/notifications/mark-all-read', async (req, res) => {
+  try {
+    const { to } = req.body;
+    if (!to) return res.status(400).json({ message: 'to is required in body' });
+    const result = await Notification.updateMany({ to, read: false }, { $set: { read: true } });
+    res.json({ message: 'Marked all read', matched: result.matchedCount || result.n, modified: result.modifiedCount || result.nModified });
+  } catch (error) {
+    console.error('Error marking all notifications read:', error);
+    res.status(500).json({ message: 'Failed to mark notifications' });
+  }
 });
