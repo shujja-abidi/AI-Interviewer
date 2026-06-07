@@ -1,5 +1,6 @@
 import { Suspense, lazy, useState } from "react";
 import { BrowserRouter as Router, Navigate, Route, Routes } from "react-router-dom";
+import PrivateRoute from "./components/auth/PrivateRoute";
 
 import Banner from "./components/Banner/Banner";
 import Footer from "./components/Footer/Footer";
@@ -21,6 +22,7 @@ const Resources = lazy(() => import("./components/Resources/Resources"));
 const ForStudents = lazy(() => import("./components/ForStudents/ForStudents"));
 const SideMenu = lazy(() => import("./components/SideMenu/SideMenu"));
 const CandidateHome = lazy(() => import("./components/CandidateHome/CandidateHome"));
+const JobDetail = lazy(() => import("./components/CandidateHome/JobDetail"));
 const CandidateApplications = lazy(() => import("./components/Applications/CandidateApplications"));
 const EmployerApplications = lazy(() => import("./components/Applications/EmployerApplications"));
 const NotificationsPage = lazy(() => import("./components/Notifications/NotificationsPage"));
@@ -42,10 +44,14 @@ const Profiles = lazy(() => import("./components/Business/Profiles"));
 const SignUpBusiness = lazy(() => import("./components/SignUp/SignUpBusiness"));
 const LoginBusiness = lazy(() => import("./components/Login/LoginBusiness"));
 const Preview = lazy(() => import("./components/Business/Jobpost/Preview"));
+const ManageJobs = lazy(() => import("./components/Business/ManageJobs"));
+const EditJob = lazy(() => import("./components/Business/EditJob"));
 const LoginAdmin = lazy(() => import("./components/Login/LoginAdmin"));
 const AdminLayout = lazy(() => import("./components/Admin/AdminLayout"));
 const AdminHome = lazy(() => import("./components/Admin/AdminHome"));
 const AdminUsers = lazy(() => import("./components/Admin/AdminUsers"));
+const AdminJobs = lazy(() => import("./components/Admin/AdminJobs"));
+const AdminLogs = lazy(() => import("./components/Admin/AdminLogs"));
 const AIInterviewStart = lazy(() => import("./components/AIInterviewStart/AIInterviewStart"));
 const AIInterviewInstructions = lazy(() => import("./components/AIInterviewInstructions/AIInterviewInstructions"));
 
@@ -154,56 +160,65 @@ const App = () => {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/login-admin" element={<LoginAdmin />} />
 
-            <Route path="/admin" element={<AdminLayout />}>
+            <Route path="/admin" element={<PrivateRoute allowedRoles={['admin']}><AdminLayout /></PrivateRoute>}>
               <Route path="home" element={<AdminHome />} />
               <Route path="users" element={<AdminUsers />} />
+              <Route path="jobs" element={<AdminJobs />} />
+              <Route path="logs" element={<AdminLogs />} />
             </Route>
 
             <Route path="/candidate" element={<Navigate to="/candidate/home" />} />
             <Route
               path="/candidate/*"
               element={
-                <div className={`candidate-layout flex ${isSideMenuOpen ? "ml-64" : ""}`}>
-                  <SideMenu isOpen={isSideMenuOpen} toggleMenu={toggleSideMenu} />
-                  <div className="candidate-content flex-grow p-6 transition-all">
-                    <Routes>
-                      <Route path="home" element={<CandidateHome />} />
-                      <Route path="resume" element={<Resume />} />
-                      <Route path="ats" element={<Ats />} />
-                      <Route path="applications" element={<CandidateApplications />} />
-                      <Route path="history" element={<History />} />
-                      <Route path="profile" element={<Profile />} />
-                      <Route path="settings" element={<Settings />} />
-                      <Route path="ai-mock-interview" element={<AIInterviewInstructions />} />
-                      <Route path="ai-mock-interview/start" element={<AIInterviewStart />} />
-                      <Route path="ai-interview" element={<AIInterviewInstructions />} />
-                      <Route path="ai-interview/start" element={<AIInterviewStart />} />
-                    </Routes>
+                <PrivateRoute allowedRoles={['candidate']}>
+                  <div className={`candidate-layout flex ${isSideMenuOpen ? "ml-64" : ""}`}>
+                    <SideMenu isOpen={isSideMenuOpen} toggleMenu={toggleSideMenu} />
+                    <div className="candidate-content flex-grow p-6 transition-all">
+                      <Routes>
+                        <Route path="home" element={<CandidateHome />} />
+                        <Route path="job/:jobId" element={<JobDetail />} />
+                        <Route path="resume" element={<Resume />} />
+                        <Route path="ats" element={<Ats />} />
+                        <Route path="applications" element={<CandidateApplications />} />
+                        <Route path="history" element={<History />} />
+                        <Route path="profile" element={<Profile />} />
+                        <Route path="settings" element={<Settings />} />
+                        <Route path="ai-mock-interview" element={<AIInterviewInstructions />} />
+                        <Route path="ai-mock-interview/start" element={<AIInterviewStart />} />
+                        <Route path="ai-interview" element={<AIInterviewInstructions />} />
+                        <Route path="ai-interview/start" element={<AIInterviewStart />} />
+                      </Routes>
+                    </div>
                   </div>
-                </div>
+                </PrivateRoute>
               }
             />
 
             <Route
               path="/business/*"
               element={
-                <div className="app-layout flex">
-                  <BusinessNavbar />
-                  <main className="main-content flex-1 p-6 bg-gray-100">
-                    <Routes>
-                      <Route path="/" element={<Navigate to="/business/home" replace />} />
-                      <Route path="home" element={<Homepage />} />
-                      <Route path="overview" element={<Overview />} />
-                      <Route path="basic-details" element={<BasicDetails />} />
-                      <Route path="mcqs" element={<Mcqs />} />
-                      <Route path="hr-interview" element={<HRInterview />} />
-                      <Route path="technical-interview" element={<TechnicalInterview />} />
-                      <Route path="profile" element={<Profiles />} />
-                      <Route path="preview" element={<Preview />} />
-                      <Route path="applications" element={<EmployerApplications />} />
-                    </Routes>
-                  </main>
-                </div>
+                <PrivateRoute allowedRoles={['business']}>
+                  <div className="app-layout flex">
+                    <BusinessNavbar />
+                    <main className="main-content flex-1 p-6 bg-gray-100">
+                      <Routes>
+                        <Route path="/" element={<Navigate to="/business/home" replace />} />
+                        <Route path="home" element={<Homepage />} />
+                        <Route path="overview" element={<Overview />} />
+                        <Route path="basic-details" element={<BasicDetails />} />
+                        <Route path="manage-jobs" element={<ManageJobs />} />
+                        <Route path="edit-job/:jobId" element={<EditJob />} />
+                        <Route path="mcqs" element={<Mcqs />} />
+                        <Route path="hr-interview" element={<HRInterview />} />
+                        <Route path="technical-interview" element={<TechnicalInterview />} />
+                        <Route path="profile" element={<Profiles />} />
+                        <Route path="preview" element={<Preview />} />
+                        <Route path="applications" element={<EmployerApplications />} />
+                      </Routes>
+                    </main>
+                  </div>
+                </PrivateRoute>
               }
             />
           </Routes>

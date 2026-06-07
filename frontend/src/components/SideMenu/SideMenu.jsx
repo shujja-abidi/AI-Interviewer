@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { FiHome, FiFileText, FiClock, FiUser, FiLogOut, FiMic } from "react-icons/fi";
+import { FiHome, FiFileText, FiClock, FiUser, FiLogOut, FiMic, FiBriefcase, FiSettings, FiBell } from "react-icons/fi";
 import { MdOutlineWorkOutline } from "react-icons/md"; // Updated logo icon
 import { motion } from "framer-motion"; // Optional for animation
 import { clearAuthSession } from "../../utility/auth";
@@ -34,11 +34,13 @@ const SideMenu = () => {
         <ul className="flex-grow space-y-4">
           {[
             { to: "/candidate/home", icon: <FiHome className="text-2xl" />, label: "Home" },
+            { to: "/candidate/applications", icon: <FiBriefcase className="text-2xl" />, label: "Applications" },
             { to: "/candidate/resume", icon: <FiFileText className="text-2xl" />, label: "Resume" },
+            { to: "/candidate/ai-interview", icon: <FiMic className="text-2xl" />, label: "AI Interview" },
             { to: "/candidate/history", icon: <FiClock className="text-2xl" />, label: "History" },
             { to: "/candidate/profile", icon: <FiUser className="text-2xl" />, label: "Profile" },
-            { to: "/candidate/ai-interview", icon: <FiMic className="text-2xl" />, label: "AI Interview" },
-
+            { to: "/candidate/notifications", icon: <FiBell className="text-2xl" />, label: "Notifications" },
+            { to: "/candidate/settings", icon: <FiSettings className="text-2xl" />, label: "Settings" },
           ].map(({ to, icon, label }) => (
             <li key={to}>
               <Link

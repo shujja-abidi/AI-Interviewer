@@ -9,6 +9,7 @@ const job = require("./db/job");
 const Application = require("./db/application");
 const Interview = require("./db/interview");
 const Notification = require("./db/notification");
+const Log = require("./db/log");
 const app = express();
 require("dotenv").config();
 const passport = require("passport");
@@ -56,6 +57,26 @@ app.use(
 );
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Request logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', async () => {
+    try {
+      const responseTime = Date.now() - start;
+      await Log.create({
+        method: req.method,
+        url: req.originalUrl,
+        status: res.statusCode,
+        responseTime,
+        ip: req.ip || req.connection.remoteAddress
+      });
+    } catch (err) {
+      console.error("Failed to log request:", err);
+    }
+  });
+  next();
+});
 
 // Authorization helpers
 const requireAdmin = (req, res, next) => {
@@ -467,11 +488,122 @@ app.post("/setjob", async (req, res) => {
 
 app.get("/getjobs", async (req, res) => {
   try {
-    const jobs = await job.find();
+    const { search, location, type, page, limit } = req.query;
+    const filter = {};
+    if (search) {
+      filter.$or = [
+        { name: new RegExp(search, "i") },
+        { "basicDetails.title": new RegExp(search, "i") },
+        { "basicDetails.company": new RegExp(search, "i") },
+        { "basicDetails.description": new RegExp(search, "i") },
+      ];
+    }
+    if (location) filter["basicDetails.location"] = new RegExp(location, "i");
+    if (type) filter["basicDetails.jobType"] = new RegExp(type, "i");
+
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 20;
+    const skip = (pageNum - 1) * limitNum;
+
+    const jobs = await job.find(filter).skip(skip).limit(limitNum);
     res.status(200).json(jobs);
   } catch (error) {
     console.error("Error fetching jobs:", error);
     res.status(500).json({ error: "Failed to fetch jobs" });
+  }
+});
+
+app.get("/jobs/:id", async (req, res) => {
+  try {
+    const jobDoc = await job.findById(req.params.id);
+    if (!jobDoc) return res.status(404).json({ message: "Job not found" });
+    res.json(jobDoc);
+  } catch (error) {
+    console.error("Error fetching job:", error);
+    res.status(500).json({ message: "Failed to fetch job" });
+  }
+});
+
+// Get jobs for a specific business
+app.get("/jobs/business/:email", async (req, res) => {
+  try {
+    const jobs = await job.find({ email: req.params.email }).sort({ createdAt: -1 });
+    res.json(jobs);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch business jobs" });
+  }
+});
+
+// Update a job
+app.put("/jobs/:id", requireBusinessOrAdminForJob, async (req, res) => {
+  try {
+    const updatedJob = await job.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updatedJob) return res.status(404).json({ message: "Job not found" });
+    res.json({ message: "Job updated successfully", job: updatedJob });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to update job" });
+  }
+});
+
+// Delete a job
+app.delete("/jobs/:id", requireBusinessOrAdminForJob, async (req, res) => {
+  try {
+    const deletedJob = await job.findByIdAndDelete(req.params.id);
+    if (!deletedJob) return res.status(404).json({ message: "Job not found" });
+    res.json({ message: "Job deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to delete job" });
+  }
+});
+
+// Business Dashboard Stats
+app.get("/business/dashboard-stats", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ message: "Email required" });
+    
+    const jobsCount = await job.countDocuments({ email });
+    const appsCount = await Application.countDocuments({ business_email: email });
+    const hiredCount = await Application.countDocuments({ business_email: email, status: "approved" });
+    const activeInterviews = await Application.countDocuments({ business_email: email, status: "interview_scheduled" });
+
+    res.json({
+      activeJobs: jobsCount,
+      totalApplications: appsCount,
+      hiredCandidates: hiredCount,
+      activeInterviews: activeInterviews
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch stats" });
+  }
+});
+
+// Contact Candidate
+app.post("/contact-candidate", async (req, res) => {
+  try {
+    const { candidateEmail, subject, message, businessEmail } = req.body;
+    
+    await Notification.create({
+      to: candidateEmail,
+      type: "message_from_employer",
+      title: subject,
+      message: message,
+      data: { from: businessEmail }
+    });
+
+    if (transporter) {
+      await transporter.sendMail({
+        from: EMAIL_USER,
+        to: candidateEmail,
+        replyTo: businessEmail,
+        subject: subject,
+        text: message
+      });
+    }
+
+    res.json({ message: "Message sent successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to send message" });
   }
 });
 
@@ -546,6 +678,68 @@ app.put("/api/candidate/profile", async (req, res) => {
   }
 });
 
+// Get Business Profile
+app.get("/api/business/profile", async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ message: "Email is required" });
+    const businessDoc = await business.findOne({ email }).select("-password");
+    if (!businessDoc) return res.status(404).json({ message: "Business not found" });
+    res.json(businessDoc);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch business profile" });
+  }
+});
+
+// Update Business Profile
+app.put("/api/business/profile", async (req, res) => {
+  try {
+    const { currentEmail, name, contact, address } = req.body;
+    if (!currentEmail) return res.status(400).json({ message: "Current email is required" });
+    
+    const existingBusiness = await business.findOne({ email: currentEmail });
+    if (!existingBusiness) return res.status(404).json({ message: "Business not found" });
+
+    if (name !== undefined) existingBusiness.name = name;
+    if (contact !== undefined) existingBusiness.contact = contact;
+    if (address !== undefined) existingBusiness.address = address;
+
+    await existingBusiness.save();
+    res.json({ message: "Business profile updated successfully", business: existingBusiness });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to update business profile" });
+  }
+});
+
+// Change Password
+app.post("/api/change-password", async (req, res) => {
+  try {
+    const { email, role, currentPassword, newPassword } = req.body;
+    if (!email || !role || !currentPassword || !newPassword) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    let Model;
+    if (role === "candidate") Model = user;
+    else if (role === "business") Model = business;
+    else return res.status(400).json({ message: "Invalid role" });
+
+    const account = await Model.findOne({ email });
+    if (!account) return res.status(404).json({ message: "Account not found" });
+
+    const isMatch = await bcrypt.compare(currentPassword, account.password);
+    if (!isMatch) return res.status(401).json({ message: "Incorrect current password" });
+
+    const salt = await bcrypt.genSalt(10);
+    account.password = await bcrypt.hash(newPassword, salt);
+    await account.save();
+
+    res.json({ message: "Password changed successfully" });
+  } catch (error) {
+    console.error("Change password error:", error);
+    res.status(500).json({ message: "Failed to change password" });
+  }
+});
 // Admin Routes
 
 // Admin Login
@@ -574,7 +768,7 @@ app.post("/loginadmin", async (req, res) => {
 });
 
 // Get All Users (Admin)
-app.get("/api/admin/users", async (req, res) => {
+app.get("/api/admin/users", requireAdmin, async (req, res) => {
   try {
     const candidates = await user.find({}, { password: 0 }); // Exclude password
     const businesses = await business.find({}, { password: 0 });
@@ -591,7 +785,7 @@ app.get("/api/admin/users", async (req, res) => {
 });
 
 // Delete User (Admin)
-app.delete("/api/admin/user/:type/:id", async (req, res) => {
+app.delete("/api/admin/user/:type/:id", requireAdmin, async (req, res) => {
   try {
     const { type, id } = req.params;
     let result;
@@ -616,7 +810,7 @@ app.delete("/api/admin/user/:type/:id", async (req, res) => {
 });
 
 // Update User (Admin)
-app.put("/api/admin/user/:type/:id", async (req, res) => {
+app.put("/api/admin/user/:type/:id", requireAdmin, async (req, res) => {
   try {
     const { type, id } = req.params;
     const updateData = req.body;
@@ -644,6 +838,27 @@ app.put("/api/admin/user/:type/:id", async (req, res) => {
   }
 });
 
+// Delete Job (Admin)
+app.delete("/api/admin/jobs/:id", requireAdmin, async (req, res) => {
+  try {
+    const deletedJob = await job.findByIdAndDelete(req.params.id);
+    if (!deletedJob) return res.status(404).json({ message: "Job not found" });
+    res.json({ message: "Job deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to delete job" });
+  }
+});
+
+// Get System Logs (Admin)
+app.get("/api/admin/logs", requireAdmin, async (req, res) => {
+  try {
+    const logs = await Log.find().sort({ timestamp: -1 }).limit(100);
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch logs" });
+  }
+});
+
 
 
 app.listen(NODE_API_PORT, () => {
@@ -654,9 +869,14 @@ app.listen(NODE_API_PORT, () => {
 // Candidate applies to a job
 app.post("/apply", async (req, res) => {
   try {
-    const { job_id, candidate_email, candidate_name, resume, ats_score } = req.body;
+    const { job_id, candidate_email, candidate_name, resume, ats_score, session_id } = req.body;
     if (!job_id || !candidate_email) {
       return res.status(400).json({ message: "job_id and candidate_email are required" });
+    }
+
+    const existingApp = await Application.findOne({ job_id, candidate_email });
+    if (existingApp) {
+      return res.status(400).json({ message: "You have already applied for this job" });
     }
 
     const jobDoc = await job.findById(job_id);
@@ -672,6 +892,7 @@ app.post("/apply", async (req, res) => {
       candidate_name,
       resume,
       ats_score: ats_score || 0,
+      session_id,
       status: "pending",
     });
 
@@ -729,7 +950,7 @@ app.get("/applications/:id", async (req, res) => {
 app.put("/applications/:id/status", requireBusinessOwnerOrAdminForApplication, async (req, res) => {
   try {
     const { status, note, changed_by } = req.body;
-    const valid = ["pending", "ongoing", "shortlisted", "interview_scheduled", "approved", "rejected"];
+    const valid = ["pending", "ongoing", "shortlisted", "approved", "rejected"];
     if (!status || !valid.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
@@ -777,61 +998,12 @@ app.put("/applications/:id/status", requireBusinessOwnerOrAdminForApplication, a
   }
 });
 
-// Schedule interview for an application
-app.post('/applications/:id/schedule', requireBusinessOwnerOrAdminForApplication, async (req, res) => {
-  try {
-    const { scheduled_time, notes, interview_link } = req.body;
-    const appDoc = await Application.findById(req.params.id);
-    if (!appDoc) return res.status(404).json({ message: 'Application not found' });
 
-    appDoc.scheduled_interview = {
-      scheduled_time: scheduled_time ? new Date(scheduled_time) : null,
-      notes: notes || '',
-      interview_link: interview_link || '',
-    };
-    appDoc.status = 'interview_scheduled';
-    appDoc.updated_at = new Date();
-    appDoc.history = appDoc.history || [];
-    appDoc.history.push({ status: appDoc.status, note: notes || '', changed_by: req.body.changed_by || 'employer', changed_at: new Date() });
-
-    await appDoc.save();
-
-    // notify candidate
-    try {
-      await Notification.create({
-        to: appDoc.candidate_email,
-        type: 'interview_scheduled',
-        title: 'Interview Scheduled',
-        message: `Your interview for ${appDoc.job_title} has been scheduled for ${appDoc.scheduled_interview.scheduled_time}`,
-        data: { application_id: appDoc._id.toString(), scheduled_time: appDoc.scheduled_interview.scheduled_time },
-      });
-    } catch (nerr) {
-      console.error('Failed to create schedule notification:', nerr);
-    }
-
-    if (transporter) {
-      try {
-        await transporter.sendMail({
-          from: EMAIL_USER,
-          to: appDoc.candidate_email,
-          subject: `Interview scheduled: ${appDoc.job_title}`,
-          text: `Hello ${appDoc.candidate_name || ''},\n\nYour interview for ${appDoc.job_title} is scheduled at ${appDoc.scheduled_interview.scheduled_time}.\n\nLink: ${appDoc.scheduled_interview.interview_link || 'TBD'}\n\nNotes:\n${appDoc.scheduled_interview.notes || ''}`,
-        });
-      } catch (mailErr) {
-        console.error('Failed to send schedule email:', mailErr);
-      }
-    }
-
-    res.json({ message: 'Interview scheduled', application: appDoc });
-  } catch (error) {
-    console.error('Error scheduling interview:', error);
-    res.status(500).json({ message: 'Failed to schedule interview' });
-  }
 });
 
 // --- Admin Job Approval / Moderation --- //
 // List jobs with optional status filter (admin view)
-app.get("/admin/jobs", async (req, res) => {
+app.get("/admin/jobs", requireAdmin, async (req, res) => {
   try {
     const { status } = req.query;
     const filter = {};

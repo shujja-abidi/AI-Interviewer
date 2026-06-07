@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { PYTHON_API_URL } from "../../config/api";
+import { PYTHON_API_URL, NODE_API_URL } from "../../config/api";
+import { getAuthSession } from "../../utility/auth";
 import { buildInterviewPdfPayload, downloadInterviewPdf, printCurrentPage } from "../../utility/reportActions";
 
 const MAX_RECORDING_SECONDS = 5 * 60;
@@ -251,6 +252,42 @@ const AIInterviewStart = () => {
     }
   };
 
+  const [isApplying, setIsApplying] = useState(false);
+  const handleApply = async () => {
+    try {
+      setIsApplying(true);
+      const auth = getAuthSession();
+      let email = auth?.email || context.candidate_email;
+      if (!email) email = window.prompt('Enter your email to apply (we will use this to notify you):');
+      if (!email) return;
+
+      const payload = {
+        job_id: context.job?._id,
+        candidate_email: email,
+        candidate_name: auth?.name || context.candidate_name || '',
+        resume: context.resumeData,
+        ats_score: context.atsReport?.overall_score || 0,
+        session_id: sessionId,
+      };
+
+      const response = await fetch(`${NODE_API_URL}/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Apply failed');
+      
+      alert('Application submitted successfully! Redirecting to applications history...');
+      navigate("/candidate/applications");
+    } catch (err) {
+      console.error(err);
+      alert('Failed to submit application: ' + err.message);
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
   if (!sessionId || questions.length === 0) {
     return (
       <div className="flex min-h-screen justify-center items-center bg-gray-100 px-4">
@@ -498,13 +535,21 @@ const AIInterviewStart = () => {
               )}
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-3 mt-8">
               <button
                 type="button"
                 onClick={() => navigate("/candidate/history")}
-                className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 font-medium tracking-wide shadow-sm"
+                className="bg-gray-200 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-300 font-medium tracking-wide shadow-sm"
               >
-                Finish Session
+                Close (Do Not Apply)
+              </button>
+              <button
+                type="button"
+                disabled={isApplying}
+                onClick={handleApply}
+                className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 font-medium tracking-wide shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isApplying ? "Submitting..." : "Submit Application"}
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { PYTHON_API_URL } from "../../config/api";
+import { PYTHON_API_URL, NODE_API_URL } from "../../config/api";
+import { getAuthSession } from "../../utility/auth";
 import { downloadAtsPdf, printCurrentPage } from "../../utility/reportActions";
 
 const scoreColor = (score) => {
@@ -103,35 +104,6 @@ const Ats = () => {
     });
   };
 
-  import { getAuthSession } from "../../utility/auth";
-
-  const handleApply = async () => {
-    try {
-      const auth = getAuthSession();
-      let email = auth?.email;
-      if (!email) email = window.prompt('Enter your email to apply (we will use this to notify you):');
-      if (!email) return;
-      const payload = {
-        job_id: job?._id,
-        candidate_email: email,
-        candidate_name: auth?.name || '',
-        resume: resumeData,
-        ats_score: report?.overall_score || 0,
-      };
-      const response = await fetch(`${NODE_API_URL}/apply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Apply failed');
-      alert('Application submitted successfully.');
-    } catch (err) {
-      console.error(err);
-      alert('Failed to submit application.');
-    }
-  };
-
   if (!resumeData || !jobDetails) {
     return (
       <div className="p-6 bg-gray-100 min-h-screen flex justify-center items-center">
@@ -214,13 +186,6 @@ const Ats = () => {
               className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
             >
               Continue To Interview
-            </button>
-            <button
-              type="button"
-              onClick={handleApply}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 ml-2"
-            >
-              Apply For Job
             </button>
           </div>
         </div>

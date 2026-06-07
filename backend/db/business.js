@@ -6,7 +6,9 @@ const BusinessSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     contact: {type: String, required: false, unique: true},
-    address: {type :String, required: true}
+    address: {type :String, required: true},
+    resetPasswordOtp: { type: Number },
+    resetPasswordOtpExpires: { type: Date }
 });
 
 module.exports = mongoose.model("business", BusinessSchema);

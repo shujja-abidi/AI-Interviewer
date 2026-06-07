@@ -19,6 +19,16 @@ const BusinessNavbarMenu = [
   },
   {
     id: 3,
+    title: "Manage Jobs",
+    link: "/business/manage-jobs",
+  },
+  {
+    id: 4,
+    title: "Applications",
+    link: "/business/applications",
+  },
+  {
+    id: 5,
     title: "Profile",
     link: "/business/profile",
   },

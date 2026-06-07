@@ -5,6 +5,9 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import LogoutIcon from '@mui/icons-material/Logout';
 import HomeIcon from '@mui/icons-material/Home';
+import WorkIcon from '@mui/icons-material/Work';
+import ListAltIcon from '@mui/icons-material/ListAlt';
+import { clearAuthSession } from '../../utility/auth';
 
 const drawerWidth = 240;
 
@@ -12,7 +15,7 @@ const AdminLayout = () => {
     const navigate = useNavigate();
 
     const handleLogout = () => {
-        // Clear any admin session/cookie logic here
+        clearAuthSession();
         navigate('/');
     };
 
@@ -53,6 +56,18 @@ const AdminLayout = () => {
                                 <PeopleIcon />
                             </ListItemIcon>
                             <ListItemText primary="User Management" />
+                        </ListItem>
+                        <ListItem button onClick={() => navigate('/admin/jobs')}>
+                            <ListItemIcon>
+                                <WorkIcon />
+                            </ListItemIcon>
+                            <ListItemText primary="Job Moderation" />
+                        </ListItem>
+                        <ListItem button onClick={() => navigate('/admin/logs')}>
+                            <ListItemIcon>
+                                <ListAltIcon />
+                            </ListItemIcon>
+                            <ListItemText primary="System Logs" />
                         </ListItem>
                     </List>
                 </Box>

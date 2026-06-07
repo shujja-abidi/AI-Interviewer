@@ -10,10 +10,12 @@ const applicationSchema = new mongoose.Schema({
   ats_score: { type: Number, default: 0 },
   status: {
     type: String,
-    enum: ['pending', 'ongoing', 'shortlisted', 'interview_scheduled', 'approved', 'rejected'],
+    enum: ['pending', 'ongoing', 'shortlisted', 'approved', 'rejected'],
     default: 'pending',
   },
+  session_id: { type: String },
   history: { type: Array, default: [] },
+  scheduled_interview: { type: Object },
   applied_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now },
 });
