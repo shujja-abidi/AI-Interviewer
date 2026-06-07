@@ -999,7 +999,6 @@ app.put("/applications/:id/status", requireBusinessOwnerOrAdminForApplication, a
 });
 
 
-});
 
 // --- Admin Job Approval / Moderation --- //
 // List jobs with optional status filter (admin view)

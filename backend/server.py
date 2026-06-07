@@ -694,6 +694,23 @@ def business_candidate_comparison():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/api/interview-session/<session_id>", methods=["GET"])
+def get_interview_session(session_id):
+    """Return a single interview session by session_id — used by employers to view candidate AI interview report."""
+    try:
+        ensure_mongo_collection(interview_sessions_collection, "Interview session lookup")
+        if not session_id:
+            return jsonify({"error": "session_id is required"}), 400
+
+        session = interview_sessions_collection.find_one({"session_id": session_id}, {"_id": 0})
+        if not session:
+            return jsonify({"error": "Interview session not found"}), 404
+
+        return jsonify(serialize_for_json({**session, "summary": summarize_session(session)}))
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.errorhandler(413)
 def request_entity_too_large(_error):
     return (
