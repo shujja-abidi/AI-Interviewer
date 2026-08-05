@@ -201,6 +201,8 @@ def invoke_gemini(contents, purpose):
             time.sleep(GEMINI_RETRY_DELAYS[min(attempt, len(GEMINI_RETRY_DELAYS) - 1)])
 
     message = str(last_error or "")
+    print(f"--- GEMINI API ERROR ---\n{message}\n------------------------")
+    
     if "reported as leaked" in message.lower():
         raise RuntimeError("The Gemini API key is invalid or has been disabled. Please replace it with a new key.")
     if is_retryable_gemini_error(last_error):
@@ -442,7 +444,15 @@ def get_ats_score():
 def interview_questions():
     try:
         payload = request.get_json() or {}
-        questions = generate_questions(payload)
+        if payload.get("is_mock"):
+            questions = [{
+                "question": "Tell me about yourself and your professional background.",
+                "category": "Mock",
+                "focus": "General Introduction",
+                "order": 0
+            }]
+        else:
+            questions = generate_questions(payload)
         session = create_interview_session(payload, questions)
         return jsonify(
             {

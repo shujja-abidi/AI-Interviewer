@@ -37,7 +37,9 @@ const AdminUsers = () => {
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch(`${NODE_API_URL}/api/admin/users`);
+            const response = await fetch(`${NODE_API_URL}/api/admin/users`, {
+                credentials: 'include'
+            });
             const data = await response.json();
             setUsers(data);
             setLoading(false);
@@ -54,7 +56,8 @@ const AdminUsers = () => {
 
         try {
             const response = await fetch(`${NODE_API_URL}/api/admin/user/${user.type}/${user._id}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                credentials: 'include'
             });
 
             const data = await response.json();
@@ -87,6 +90,7 @@ const AdminUsers = () => {
             const response = await fetch(`${NODE_API_URL}/api/admin/user/${editingUser.type}/${editingUser._id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify(formData)
             });
 

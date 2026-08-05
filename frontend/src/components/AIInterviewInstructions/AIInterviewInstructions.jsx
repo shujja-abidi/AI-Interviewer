@@ -28,6 +28,7 @@ const AIInterviewInstructions = () => {
   const jobDetails = pageContext.jobDetails || job?.basicDetails || {};
   const resumeData = pageContext.resumeData || storedContext.resumeData || null;
   const atsReport = pageContext.atsReport || storedContext.atsReport || null;
+  const isMockInterview = !jobDetails.title;
 
   const [checked, setChecked] = useState(new Array(baseInstructions.length).fill(false));
   const [cameraStream, setCameraStream] = useState(null);
@@ -106,6 +107,7 @@ const AIInterviewInstructions = () => {
         ats_report: atsReport || {},
         candidate_resume: JSON.stringify(resumeData || {}, null, 2),
         ats_report_summary: atsReport?.summary || "",
+        is_mock: isMockInterview,
       };
 
       const response = await fetch(`${PYTHON_API_URL}/api/interview-questions`, {
@@ -155,10 +157,11 @@ const AIInterviewInstructions = () => {
 
   return (
     <div className="flex min-h-screen flex-col p-10 bg-gray-100">
-      <h1 className="text-3xl font-bold text-gray-800 mb-4">Real-Time AI Interview Setup</h1>
+      <h1 className="text-3xl font-bold text-gray-800 mb-4">
+        {isMockInterview ? "Mock Interview Setup" : "Real-Time AI Interview Setup"}
+      </h1>
       <p className="text-gray-600 mb-8">
-        Confirm your setup, choose the interview configuration, and we will generate a short interview question set for
-        one recorded response.
+        Confirm your setup. {isMockInterview ? "We will ask you one general question to practice." : "We will generate a short interview question set for one recorded response."}
       </p>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
@@ -197,45 +200,47 @@ const AIInterviewInstructions = () => {
             </ul>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">Interview Configuration</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <label className="text-sm text-gray-700">
-                <span className="block font-medium mb-2">Interview Type</span>
-                <select
-                  value={interviewType}
-                  onChange={(event) => setInterviewType(event.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                >
-                  <option value="technical">Technical</option>
-                  <option value="hr">HR</option>
-                  <option value="behavioral">Behavioral</option>
-                  <option value="mixed">Mixed</option>
-                </select>
-              </label>
-              <label className="text-sm text-gray-700">
-                <span className="block font-medium mb-2">Difficulty</span>
-                <select
-                  value={difficulty}
-                  onChange={(event) => setDifficulty(event.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                >
-                  <option value="entry">Entry</option>
-                  <option value="mid">Mid</option>
-                  <option value="senior">Senior</option>
-                </select>
-              </label>
-              <label className="text-sm text-gray-700">
-                <span className="block font-medium mb-2">Question Count</span>
-                <input
-                  type="number"
-                  value={fixedQuestionCount}
-                  readOnly
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
-                />
-              </label>
+          {!isMockInterview && (
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Interview Configuration</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <label className="text-sm text-gray-700">
+                  <span className="block font-medium mb-2">Interview Type</span>
+                  <select
+                    value={interviewType}
+                    onChange={(event) => setInterviewType(event.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  >
+                    <option value="technical">Technical</option>
+                    <option value="hr">HR</option>
+                    <option value="behavioral">Behavioral</option>
+                    <option value="mixed">Mixed</option>
+                  </select>
+                </label>
+                <label className="text-sm text-gray-700">
+                  <span className="block font-medium mb-2">Difficulty</span>
+                  <select
+                    value={difficulty}
+                    onChange={(event) => setDifficulty(event.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  >
+                    <option value="entry">Entry</option>
+                    <option value="mid">Mid</option>
+                    <option value="senior">Senior</option>
+                  </select>
+                </label>
+                <label className="text-sm text-gray-700">
+                  <span className="block font-medium mb-2">Question Count</span>
+                  <input
+                    type="number"
+                    value={fixedQuestionCount}
+                    readOnly
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
+                  />
+                </label>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="space-y-6">

@@ -181,6 +181,7 @@ const App = () => {
                         <Route path="resume" element={<Resume />} />
                         <Route path="ats" element={<Ats />} />
                         <Route path="applications" element={<CandidateApplications />} />
+                        <Route path="notifications" element={<NotificationsPage />} />
                         <Route path="history" element={<History />} />
                         <Route path="profile" element={<Profile />} />
                         <Route path="settings" element={<Settings />} />
@@ -215,6 +216,7 @@ const App = () => {
                         <Route path="profile" element={<Profiles />} />
                         <Route path="preview" element={<Preview />} />
                         <Route path="applications" element={<EmployerApplications />} />
+                        <Route path="notifications" element={<NotificationsPage />} />
                       </Routes>
                     </main>
                   </div>

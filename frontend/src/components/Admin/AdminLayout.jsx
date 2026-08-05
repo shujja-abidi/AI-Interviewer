@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { Box, Drawer, List, ListItem, ListItemIcon, ListItemText, Typography, AppBar, Toolbar, IconButton } from '@mui/material';
+import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, AppBar, Toolbar, IconButton } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -45,29 +45,37 @@ const AdminLayout = () => {
                 <Toolbar />
                 <Box sx={{ overflow: 'auto' }}>
                     <List>
-                        <ListItem button onClick={() => navigate('/admin/home')}>
-                            <ListItemIcon>
-                                <DashboardIcon />
-                            </ListItemIcon>
-                            <ListItemText primary="Analytics" />
+                        <ListItem disablePadding>
+                            <ListItemButton onClick={() => navigate('/admin/home')}>
+                                <ListItemIcon>
+                                    <DashboardIcon />
+                                </ListItemIcon>
+                                <ListItemText primary="Analytics" />
+                            </ListItemButton>
                         </ListItem>
-                        <ListItem button onClick={() => navigate('/admin/users')}>
-                            <ListItemIcon>
-                                <PeopleIcon />
-                            </ListItemIcon>
-                            <ListItemText primary="User Management" />
+                        <ListItem disablePadding>
+                            <ListItemButton onClick={() => navigate('/admin/users')}>
+                                <ListItemIcon>
+                                    <PeopleIcon />
+                                </ListItemIcon>
+                                <ListItemText primary="User Management" />
+                            </ListItemButton>
                         </ListItem>
-                        <ListItem button onClick={() => navigate('/admin/jobs')}>
-                            <ListItemIcon>
-                                <WorkIcon />
-                            </ListItemIcon>
-                            <ListItemText primary="Job Moderation" />
+                        <ListItem disablePadding>
+                            <ListItemButton onClick={() => navigate('/admin/jobs')}>
+                                <ListItemIcon>
+                                    <WorkIcon />
+                                </ListItemIcon>
+                                <ListItemText primary="Job Moderation" />
+                            </ListItemButton>
                         </ListItem>
-                        <ListItem button onClick={() => navigate('/admin/logs')}>
-                            <ListItemIcon>
-                                <ListAltIcon />
-                            </ListItemIcon>
-                            <ListItemText primary="System Logs" />
+                        <ListItem disablePadding>
+                            <ListItemButton onClick={() => navigate('/admin/logs')}>
+                                <ListItemIcon>
+                                    <ListAltIcon />
+                                </ListItemIcon>
+                                <ListItemText primary="System Logs" />
+                            </ListItemButton>
                         </ListItem>
                     </List>
                 </Box>

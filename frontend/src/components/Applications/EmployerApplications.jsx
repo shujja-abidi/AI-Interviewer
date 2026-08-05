@@ -46,7 +46,7 @@ export default function EmployerApplications() {
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [contactEmail, setContactEmail] = useState(null);
-  const [reportSession, setReportSession] = useState(null); // { sessionId, candidateName }
+  const [reportSession, setReportSession] = useState(null); // { sessionId, candidateName, applicationData }
   const auth = getAuthSession();
 
   const fetchApps = async () => {
@@ -209,7 +209,7 @@ export default function EmployerApplications() {
                   {/* View AI Report */}
                   {a.session_id && (
                     <button
-                      onClick={() => setReportSession({ sessionId: a.session_id, candidateName: a.candidate_name || a.candidate_email })}
+                      onClick={() => setReportSession({ sessionId: a.session_id, candidateName: a.candidate_name || a.candidate_email, applicationData: a })}
                       style={{
                         background: '#f5f3ff', color: '#7c3aed', border: '1px solid #c4b5fd',
                         borderRadius: 8, padding: '7px 16px', cursor: 'pointer',
@@ -282,6 +282,7 @@ export default function EmployerApplications() {
         <InterviewReportModal
           sessionId={reportSession.sessionId}
           candidateName={reportSession.candidateName}
+          applicationData={reportSession.applicationData}
           onClose={() => setReportSession(null)}
         />
       )}

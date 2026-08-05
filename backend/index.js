@@ -869,7 +869,7 @@ app.listen(NODE_API_PORT, () => {
 // Candidate applies to a job
 app.post("/apply", async (req, res) => {
   try {
-    const { job_id, candidate_email, candidate_name, resume, ats_score, session_id } = req.body;
+    const { job_id, candidate_email, candidate_name, resume, ats_score, ats_report, session_id } = req.body;
     if (!job_id || !candidate_email) {
       return res.status(400).json({ message: "job_id and candidate_email are required" });
     }
@@ -892,6 +892,7 @@ app.post("/apply", async (req, res) => {
       candidate_name,
       resume,
       ats_score: ats_score || 0,
+      ats_report: ats_report || {},
       session_id,
       status: "pending",
     });

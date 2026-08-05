@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { NODE_API_URL } from "../../config/api";
-import { getAuthSession, setAuthSession } from "../../utility/auth";
+import { getAuthSession, setAuthSession, clearAuthSession } from "../../utility/auth";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -13,6 +13,13 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
+
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState({ text: "", type: "" });
 
   // Store the original email used to identify the user in the DB
   const [currentEmail, setCurrentEmail] = useState("");
@@ -56,6 +63,55 @@ const Profile = () => {
 
     fetchProfile();
   }, [navigate]);
+
+  const handleLogout = () => {
+    clearAuthSession();
+    navigate("/");
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage({ text: "New passwords do not match.", type: "error" });
+      return;
+    }
+    if (!currentPassword || !newPassword) {
+      setPasswordMessage({ text: "Please fill out all fields.", type: "error" });
+      return;
+    }
+    
+    setPasswordSaving(true);
+    setPasswordMessage({ text: "", type: "" });
+
+    try {
+      const session = getAuthSession();
+      const response = await fetch(`${NODE_API_URL}/api/change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: session.email,
+          role: "candidate",
+          currentPassword,
+          newPassword
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setPasswordMessage({ text: "Password changed successfully!", type: "success" });
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        setPasswordMessage({ text: data.message || "Failed to change password.", type: "error" });
+      }
+    } catch (error) {
+      console.error("Change password error:", error);
+      setPasswordMessage({ text: "Unable to connect to the server.", type: "error" });
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
 
   const handleSaveChanges = async (e) => {
     e.preventDefault();
@@ -194,6 +250,79 @@ const Profile = () => {
             {saving ? "Saving..." : "Save Changes"}
           </button>
         </form>
+
+        {/* Password Change Form */}
+        <div className="mt-12 pt-8 border-t border-gray-200">
+          <h2 className="text-2xl font-semibold mb-6 text-gray-700">Change Password</h2>
+          
+          {passwordMessage.text && (
+            <div
+              className={`mb-6 p-4 rounded-md text-sm font-medium ${
+                passwordMessage.type === "success"
+                  ? "bg-green-50 text-green-700 border border-green-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}
+            >
+              {passwordMessage.text}
+            </div>
+          )}
+
+          <form className="space-y-6" onSubmit={handleChangePassword}>
+            <div>
+              <label htmlFor="currentPassword" className="block text-lg font-medium text-gray-700 mb-2">
+                Current Password
+              </label>
+              <input
+                type="password"
+                id="currentPassword"
+                className="w-full border border-gray-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="Enter current password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="newPassword" className="block text-lg font-medium text-gray-700 mb-2">
+                New Password
+              </label>
+              <input
+                type="password"
+                id="newPassword"
+                className="w-full border border-gray-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="Enter new password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="confirmPassword" className="block text-lg font-medium text-gray-700 mb-2">
+                Confirm New Password
+              </label>
+              <input
+                type="password"
+                id="confirmPassword"
+                className="w-full border border-gray-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-primary"
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={passwordSaving}
+              className={`w-full text-white py-3 px-6 rounded-lg transition duration-200 mt-6 ${
+                passwordSaving
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-primary hover:bg-primary-dark"
+              }`}
+            >
+              {passwordSaving ? "Updating..." : "Update Password"}
+            </button>
+          </form>
+        </div>
       </section>
     </main>
   );

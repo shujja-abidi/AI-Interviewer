@@ -29,6 +29,7 @@ const AIInterviewStart = () => {
   const context = location.state || persistedContext;
   const questions = context.questions || [];
   const sessionId = context.sessionId || "";
+  const isMockInterview = !context.jobDetails?.title && !context.job;
   const [report, setReport] = useState(null);
   const [sessionSummary, setSessionSummary] = useState(context.sessionSummary || null);
   const [isLoading, setIsLoading] = useState(false);
@@ -267,6 +268,7 @@ const AIInterviewStart = () => {
         candidate_name: auth?.name || context.candidate_name || '',
         resume: context.resumeData,
         ats_score: context.atsReport?.overall_score || 0,
+        ats_report: context.atsReport || {},
         session_id: sessionId,
       };
 
@@ -536,21 +538,36 @@ const AIInterviewStart = () => {
             </div>
 
             <div className="flex justify-end gap-3 mt-8">
-              <button
-                type="button"
-                onClick={() => navigate("/candidate/history")}
-                className="bg-gray-200 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-300 font-medium tracking-wide shadow-sm"
-              >
-                Close (Do Not Apply)
-              </button>
-              <button
-                type="button"
-                disabled={isApplying}
-                onClick={handleApply}
-                className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 font-medium tracking-wide shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isApplying ? "Submitting..." : "Submit Application"}
-              </button>
+              {!isMockInterview ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/candidate/history")}
+                    className="bg-gray-200 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-300 font-medium tracking-wide shadow-sm"
+                  >
+                    Close (Do Not Apply)
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isApplying}
+                    onClick={handleApply}
+                    className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 font-medium tracking-wide shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isApplying ? "Submitting..." : "Submit Application"}
+                  </button>
+                </>
+              ) : (
+                <div className="flex flex-col items-end gap-2 w-full text-right">
+                  <p className="text-base font-semibold text-blue-700">Mock Interview Complete! Ready for the real thing?</p>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/candidate/home")}
+                    className="bg-blue-600 text-white px-8 py-3 rounded-md hover:bg-blue-700 font-bold tracking-wide shadow-md transition-all"
+                  >
+                    Proceed to Home to Apply for Jobs
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -17,7 +17,7 @@ const SideMenu = () => {
         initial={{ x: 0 }}
         animate={{ x: 0 }}
         transition={{ duration: 0.3 }}
-        className="fixed top-0 left-0 h-full bg-gray-100 text-gray-800 flex flex-col p-6 space-y-6 w-80 z-10 shadow-lg" // Increased width to w-80
+        className="fixed top-0 left-0 h-full overflow-y-auto bg-gray-100 text-gray-800 flex flex-col p-6 space-y-6 w-80 z-10 shadow-lg" // Increased width to w-80
       >
         {/* Logo Section */}
         <div className="px-8 py-10">
@@ -35,12 +35,10 @@ const SideMenu = () => {
           {[
             { to: "/candidate/home", icon: <FiHome className="text-2xl" />, label: "Home" },
             { to: "/candidate/applications", icon: <FiBriefcase className="text-2xl" />, label: "Applications" },
-            { to: "/candidate/resume", icon: <FiFileText className="text-2xl" />, label: "Resume" },
-            { to: "/candidate/ai-interview", icon: <FiMic className="text-2xl" />, label: "AI Interview" },
+            { to: "/candidate/ai-interview", icon: <FiMic className="text-2xl" />, label: "Mock Interview" },
             { to: "/candidate/history", icon: <FiClock className="text-2xl" />, label: "History" },
             { to: "/candidate/profile", icon: <FiUser className="text-2xl" />, label: "Profile" },
             { to: "/candidate/notifications", icon: <FiBell className="text-2xl" />, label: "Notifications" },
-            { to: "/candidate/settings", icon: <FiSettings className="text-2xl" />, label: "Settings" },
           ].map(({ to, icon, label }) => (
             <li key={to}>
               <Link
@@ -55,20 +53,18 @@ const SideMenu = () => {
               </Link>
             </li>
           ))}
+          <li>
+            <Link
+              to="/"
+              className="flex items-center gap-3 p-3 text-lg font-medium text-red-700 hover:bg-gray-200 hover:text-red-600 rounded-lg transition-all duration-200"
+              aria-label="Log out"
+              onClick={clearAuthSession}
+            >
+              <FiLogOut className="text-2xl" />
+              <span>Logout</span>
+            </Link>
+          </li>
         </ul>
-
-        {/* Logout */}
-        <div className="mt-auto">
-          <Link
-            to="/"
-            className="flex items-center gap-3 p-3 text-lg font-medium text-red-700 hover:bg-gray-200 hover:text-red-600 rounded-lg transition-all duration-200"
-            aria-label="Log out"
-            onClick={clearAuthSession}
-          >
-            <FiLogOut className="text-2xl" />
-            <span>Logout</span>
-          </Link>
-        </div>
       </motion.aside>
 
       {/* Main Content Area */}

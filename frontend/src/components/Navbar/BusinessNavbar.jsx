@@ -91,7 +91,7 @@ const BusinessNavbar = () => {
               <MdMenu />
             </button>
             <div className="hidden lg:block">
-              <NotificationsBell />
+              <NotificationsBell linkTo="/business/notifications" />
             </div>
           </div>
         </div>
